@@ -18,8 +18,6 @@ import streamlit as st
 # ============================================================
 
 
-# ---------- Core math ----------
-
 def digital_root(n: int) -> int:
     """Return the 1-9 digital root."""
     if n == 0:
@@ -28,8 +26,8 @@ def digital_root(n: int) -> int:
 
 
 def digit_sum(n: int) -> int:
-    """Return the sum of the digits of an integer."""
-    return sum(int(digit) for digit in str(abs(n)))
+    """Return sum of digits."""
+    return sum(int(d) for d in str(abs(n)))
 
 
 def year_root(year: int) -> int:
@@ -51,7 +49,7 @@ CANON_PAIRS = {
 
 
 def build_year_table(year: int) -> pd.DataFrame:
-    """Build one row for every date in the selected year."""
+    """Build one row for each date in the selected year."""
     yr = year_root(year)
     rows = []
 
@@ -87,134 +85,41 @@ def build_year_table(year: int) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-# ---------- Visual cards ----------
-
-def day_card(row: pd.Series) -> str:
-    """Render one day as a readable HTML card."""
-    day = row["Day"]
-    date_root = row["Date Root"]
-    day_root = row["Day Root"]
-    pair = row["Octave Pair"]
-    grammar = row["Grammar"]
-
+def render_day(row: pd.Series) -> None:
+    """Render one day using only native Streamlit components."""
     is_gate = bool(row["1-Gate"])
     is_canon = bool(row["Canon Pair"])
 
-    background = "#ffffff"
-    border = "1px solid #a8a8a8"
+    with st.container(border=True):
+        st.markdown(f"### {row['Day']}")
 
-    if is_canon:
-        background = "#eaf2ff"
-        border = "2px solid #265ca8"
+        st.write(f"**Date Root:** {row['Date Root']}")
+        st.write(f"**Day Root:** {row['Day Root']}")
+        st.write(f"**Pair:** {row['Octave Pair']}")
+        st.caption(row["Grammar"])
 
-    if is_gate:
-        background = "#fff0a6"
-        border = "4px solid #111111"
+        if is_gate:
+            st.warning("GATE")
 
-    if is_gate and is_canon:
-        background = "#ffe28a"
-        border = "4px solid #111111"
-
-    badges = ""
-
-    if is_gate:
-        badges += """
-        <div style="
-            display:inline-block;
-            margin-top:8px;
-            padding:3px 8px;
-            border-radius:999px;
-            background:#111111;
-            color:#ffffff;
-            font-size:11px;
-            font-weight:900;
-            letter-spacing:0.03em;
-        ">
-            GATE
-        </div>
-        """
-
-    if is_canon:
-        badges += f"""
-        <div style="
-            display:inline-block;
-            margin-top:6px;
-            padding:3px 8px;
-            border-radius:999px;
-            background:#265ca8;
-            color:#ffffff;
-            font-size:11px;
-            font-weight:900;
-            letter-spacing:0.01em;
-        ">
-            {row["Canon Meaning"]}
-        </div>
-        """
-
-    return f"""
-    <div style="
-        border:{border};
-        background:{background};
-        border-radius:14px;
-        padding:10px;
-        min-height:150px;
-        color:#111111;
-        font-size:15px;
-        line-height:1.35;
-        box-sizing:border-box;
-    ">
-        <div style="font-size:28px;font-weight:900;line-height:1;">{day}</div>
-
-        <div style="margin-top:8px;"><b>Date Root:</b> {date_root}</div>
-        <div><b>Day Root:</b> {day_root}</div>
-        <div><b>Pair:</b> {pair}</div>
-
-        <div style="
-            margin-top:8px;
-            padding-top:6px;
-            border-top:1px solid rgba(0,0,0,0.18);
-            font-size:12px;
-            font-weight:800;
-        ">
-            {grammar}
-        </div>
-
-        <div style="margin-top:4px;">
-            {badges}
-        </div>
-    </div>
-    """
+        if is_canon:
+            st.info(row["Canon Meaning"])
 
 
 def render_month(df: pd.DataFrame, year: int, month: int) -> None:
-    """Render one month using native Streamlit columns."""
+    """Render a month as a 7-column native Streamlit calendar."""
     month_name = calendar.month_name[month]
     month_root = digital_root(month)
     yr = year_root(year)
 
-    st.markdown("---")
-    st.markdown(f"## {month_name}")
+    st.divider()
+    st.header(month_name)
     st.caption(f"Month Root {month_root} · Year Root {yr}")
 
     weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
     header_cols = st.columns(7)
     for col, weekday in zip(header_cols, weekdays):
-        col.markdown(
-            f"""
-            <div style="
-                text-align:center;
-                font-weight:900;
-                color:#111111;
-                border-bottom:2px solid #111111;
-                padding-bottom:6px;
-                margin-bottom:6px;
-            ">
-                {weekday}
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        col.markdown(f"**{weekday}**")
 
     first_weekday, days_in_month = calendar.monthrange(year, month)
     month_df = df[df["Month #"] == month]
@@ -223,12 +128,14 @@ def render_month(df: pd.DataFrame, year: int, month: int) -> None:
 
     # First week
     cols = st.columns(7)
+
     for i in range(7):
         if i < first_weekday:
-            cols[i].markdown("&nbsp;", unsafe_allow_html=True)
+            cols[i].empty()
         else:
             row = month_df[month_df["Day"] == current_day].iloc[0]
-            cols[i].markdown(day_card(row), unsafe_allow_html=True)
+            with cols[i]:
+                render_day(row)
             current_day += 1
 
     # Remaining weeks
@@ -238,21 +145,21 @@ def render_month(df: pd.DataFrame, year: int, month: int) -> None:
         for i in range(7):
             if current_day <= days_in_month:
                 row = month_df[month_df["Day"] == current_day].iloc[0]
-                cols[i].markdown(day_card(row), unsafe_allow_html=True)
+                with cols[i]:
+                    render_day(row)
                 current_day += 1
             else:
-                cols[i].markdown("&nbsp;", unsafe_allow_html=True)
+                cols[i].empty()
 
-
-# ---------- Summaries ----------
 
 def gate_summary(df: pd.DataFrame) -> pd.DataFrame:
+    """Summarize 1-gates by month."""
     gates = df[df["1-Gate"]].copy()
 
     if gates.empty:
         return pd.DataFrame()
 
-    summary = (
+    return (
         gates.groupby(["Month #", "Month", "Month Root"])
         .agg(
             Gate_Days=("Day", lambda x: ", ".join(str(v) for v in x)),
@@ -264,10 +171,9 @@ def gate_summary(df: pd.DataFrame) -> pd.DataFrame:
         .sort_values("Month #")
     )
 
-    return summary
-
 
 def pair_summary(df: pd.DataFrame) -> pd.DataFrame:
+    """Summarize octave pairs."""
     return (
         df.groupby(["Octave Pair", "Month Root", "Day Root"])
         .agg(
@@ -329,8 +235,8 @@ with st.sidebar:
     )
 
 df = build_year_table(selected_year)
-
 yr = year_root(selected_year)
+
 gates = df[df["1-Gate"]]
 canon = df[df["Canon Pair"]]
 
@@ -352,8 +258,8 @@ st.markdown(
 - **Date Root** = visible phase of the date
 - **Day Root** = root of the day number
 - **Pair** = Month Root / Day Root
-- **Yellow** = 1-Gate / return to One
-- **Blue** = canon octave-pair day
+- **GATE** = Date Root returns to 1
+- **Canon Pair** = one of the tracked octave-pair relationships
 """
 )
 
@@ -363,14 +269,12 @@ if selected_year == 2026:
         "The date-field reveals octave-pair gates where month and day-root complete the 9-field."
     )
 
-# ---------- Display modes ----------
-
 if display_mode == "Full Calendar":
     for month in months:
         render_month(df, selected_year, month)
 
 elif display_mode == "Only 1-Gates":
-    st.subheader("1-Gates")
+    st.header("1-Gates")
 
     st.dataframe(
         gates[
@@ -392,7 +296,7 @@ elif display_mode == "Only 1-Gates":
         hide_index=True,
     )
 
-    st.markdown("### 1-Gates by Month")
+    st.subheader("1-Gates by Month")
     st.dataframe(
         gate_summary(df),
         use_container_width=True,
@@ -400,7 +304,7 @@ elif display_mode == "Only 1-Gates":
     )
 
 elif display_mode == "Only Canon Pairs":
-    st.subheader("Canon Octave Pair Days")
+    st.header("Canon Octave Pair Days")
 
     st.dataframe(
         canon[
@@ -423,7 +327,7 @@ elif display_mode == "Only Canon Pairs":
     )
 
 elif display_mode == "Table View":
-    st.subheader("Full Table")
+    st.header("Full Table")
 
     st.dataframe(
         df[
@@ -448,7 +352,7 @@ elif display_mode == "Table View":
     )
 
 elif display_mode == "Pair Summary":
-    st.subheader("Octave Pair Summary")
+    st.header("Octave Pair Summary")
 
     st.dataframe(
         pair_summary(df),
@@ -456,20 +360,17 @@ elif display_mode == "Pair Summary":
         hide_index=True,
     )
 
-    st.markdown("### Canon Pair Key")
+    st.subheader("Canon Pair Key")
 
-    key_rows = [
-        {"Octave Pair": pair, "Meaning": meaning}
-        for pair, meaning in CANON_PAIRS.items()
-    ]
+    key_df = pd.DataFrame(
+        [{"Octave Pair": pair, "Meaning": meaning} for pair, meaning in CANON_PAIRS.items()]
+    )
 
     st.dataframe(
-        pd.DataFrame(key_rows),
+        key_df,
         use_container_width=True,
         hide_index=True,
     )
-
-# ---------- Download ----------
 
 st.download_button(
     "Download full year CSV",
